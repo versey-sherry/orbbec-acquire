@@ -153,8 +153,8 @@ def write_metadata(filename_prefix, subject_name, session_name,
             
 def capture_from_camera(pipeline, config, filename_prefix, recording_length, save_ir=True,
                        display_frames=False, display_time=False, 
-                       realtime_queue=None):
-   
+                    realtime_queue=None):
+    
     camera_name = filename_prefix.split('.')[-1]
     image_queue = Queue()
     write_process = Process(target=write_images, args=(image_queue, filename_prefix), kwargs={'save_ir': save_ir})
@@ -257,8 +257,12 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
         recording_length (int): recording time in seconds.
         device_id (int, optional): camera id number if there are multiple cameras. Defaults to 0.
     """
+    
+    PRINT_INTERVAL = 15
+    MIN_DEPTH = 20 # 20mm
+    MAX_DEPTH = 10000 
+    
     filename_prefix = os.path.join(base_dir,'session_' + datetime.now().strftime("%Y%m%d%H%M%S"))
-
     os.makedirs(filename_prefix, exist_ok=True)
     
     # write recording metadata
@@ -345,7 +349,7 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
                 realtime_queue.put((ir_data,camera_name))
 
             if count > 0:
-                if display_time and count % 15: 
+                if display_time and count % PRINT_INTERVAL: 
                     # sys.stdout.write('\rRecorded '+repr(int(time.time()-start_time))+' out of '+repr(recording_length)+' seconds')
                     sys.stdout.write('\rRecorded '+repr(int(time.time()-start_time))+' out of '+repr(recording_length)+' seconds '+
                                     '- Current Frame rate '+ str(round(len(system_timestamps) / (max(system_timestamps)-min(system_timestamps)), 2))+' fps')
