@@ -274,6 +274,9 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
         display_process = Process(target=display_images, args=(display_queue,))
         display_process.start()
 
+    # define the camera
+    pipeline = Pipeline()
+    config = Config()
     # set up depth stream
     profile_list = pipeline.get_stream_profile_list(OBSensorType.DEPTH_SENSOR)
     depth_profile = profile_list.get_default_video_stream_profile()
@@ -286,8 +289,6 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
     config.enable_stream(ir_profile)
 
     # start the camera
-    pipeline = Pipeline()
-    config = Config()
     pipeline.start(config)
     
     image_queue = Queue()
