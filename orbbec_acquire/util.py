@@ -173,7 +173,7 @@ def capture_from_camera(pipeline, config, filename_prefix, recording_length, sav
     
     try:
         while time.time()-start_time < recording_length:  
-            frames = pipeline.wait_for_frames(100)
+            frames = pipeline.wait_for_frames(1000)
             if frames is None: 
                 print('Dropped frame')
                 continue
@@ -264,9 +264,15 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
     # write recording metadata
     write_metadata(filename_prefix, subject_name, session_name)
 
-    # start the camera
-    pipeline = Pipeline()
-    config = Config()
+    camera_name = filename_prefix.split('.')[-1]
+    image_queue = Queue()
+    write_process = Process(target=write_images, args=(image_queue, filename_prefix), kwargs={'save_ir': save_ir})
+    write_process.start()
+    
+    if display_frames: 
+        display_queue = Queue()
+        display_process = Process(target=display_images, args=(display_queue,))
+        display_process.start()
 
     # set up depth stream
     profile_list = pipeline.get_stream_profile_list(OBSensorType.DEPTH_SENSOR)
@@ -279,11 +285,84 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
     ir_profile = profile_list.get_default_video_stream_profile()
     config.enable_stream(ir_profile)
 
+    # start the camera
+    pipeline = Pipeline()
+    config = Config()
+    pipeline.start(config)
+    
+    image_queue = Queue()
+    system_timestamps = []
+    device_timestamps = []
+    start_time = time.time()
+    count = 0
 
-    p_bottom = Process(target=capture_from_camera, 
-                       args=(pipeline, config, filename_prefix , recording_length),
-                       kwargs={'save_ir': save_ir, 'display_frames': display_frames, 'display_time':display_time})
+    # the actual recording
+    try:
+        while time.time()-start_time < recording_length:
+            frames = pipeline.wait_for_frames(1000)
+            if frames is None: 
+                print('Dropped frame')
+                continue
+            depth_frame = frames.get_depth_frame()
+            if depth_frame is None:
+                continue
+            width = depth_frame.get_width()
+            height = depth_frame.get_height()
+            scale = depth_frame.get_depth_scale()
 
-    p_bottom.start()
-   
+            depth_data = np.frombuffer(depth_frame.get_data(), dtype=np.uint16)
+            depth_data = depth_data.reshape((height, width))
+            depth_data = depth_data.astype(np.float32) * scale
+            depth_data = np.where((depth_data > MIN_DEPTH) & (depth_data < MAX_DEPTH), depth_data, 0)
+            depth_data = depth_data.astype(np.uint16)
+            
+            # not sure how to get device time stamp yet
+            system_timestamps.append(time.time())
+            
+            ir_frame = frames.get_ir_frame()
+            if ir_frame is None:
+                continue
+            ir_data = np.asanyarray(ir_frame.get_data())
+            width = ir_frame.get_width()
+            height = ir_frame.get_height()
+            ir_format = ir_frame.get_format()
+            print('irformat', ir_format)
 
+            ir_data = np.frombuffer(ir_data, dtype=np.uint16)
+            # data_type = np.uint16
+            # image_dtype = cv2.CV_16UC1
+            # max_data = 65535
+            ir_data = np.resize(ir_data, (height, width, 1))
+
+
+
+            image_queue.put((ir_data,depth_data))
+            if display_frames and count % 2 == 0: 
+                display_queue.put((ir_data[::2,::2],))
+                
+            if realtime_queue is not None and count%3==0:
+                realtime_queue.put((ir_data,camera_name))
+
+            if count > 0:
+                if display_time and count % 15: 
+                    # sys.stdout.write('\rRecorded '+repr(int(time.time()-start_time))+' out of '+repr(recording_length)+' seconds')
+                    sys.stdout.write('\rRecorded '+repr(int(time.time()-start_time))+' out of '+repr(recording_length)+' seconds '+
+                                    '- Current Frame rate '+ str(round(len(system_timestamps) / (max(system_timestamps)-min(system_timestamps)), 2))+' fps')
+            count += 1
+    except OSError:
+        print("Recording stopped early")
+
+    finally:
+        pipeline.stop()
+        # change from microsecond to millisecond
+        device_timestamps = np.array(device_timestamps)/1000
+        
+        np.savetxt(os.path.join(filename_prefix, 'depth_ts.txt'),device_timestamps, fmt = '%f')
+        print(' - Session Average Frame rate = ', str(round(len(system_timestamps) / (max(system_timestamps)-min(system_timestamps)), 2))+' fps')
+
+        image_queue.put(tuple())
+        write_process.join()
+
+        if display_frames:
+            display_queue.put(tuple())
+            display_process.join()
