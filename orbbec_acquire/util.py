@@ -176,8 +176,8 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
 
     camera_name = filename_prefix.split('.')[-1]
     image_queue = Queue()
-    write_process = Process(target=write_images, args=(image_queue, filename_prefix), kwargs={'save_ir': save_ir})
-    write_process.start()
+    # write_process = Process(target=write_images, args=(image_queue, filename_prefix), kwargs={'save_ir': save_ir})
+    # write_process.start()
     
     if display_frames: 
         display_queue = Queue()
@@ -205,11 +205,13 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
     system_timestamps = []
     device_timestamps = []
     start_time = time.time()
+    print(start_time)
     count = 0
 
     # the actual recording
     try:
         while time.time()-start_time < recording_length:
+        
             frames = pipeline.wait_for_frames(1000)
             if frames is None: 
                 print('Dropped frame')
@@ -242,10 +244,17 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
             ir_data = np.frombuffer(ir_data, dtype=np.uint16)
             ir_data = np.resize(ir_data, (height, width, 1))
 
+            # info about ir for rendering
+            data_type = np.uint16
+            image_dtype = cv2.CV_16UC1
+            max_data = 65535
+            cv2.normalize(ir_data, ir_data, 0, max_data, cv2.NORM_MINMAX, dtype=image_dtype)
+            ir_data = ir_data.astype(data_type)
+            
             image_queue.put((ir_data,depth_data))
-            if display_frames and count % 2 == 0: 
-                display_queue.put((ir_data[::2,::2],))
-
+            if display_frames and count % 2 == 0:
+                
+                display_queue.put((ir_data,))
 
             if count > 0:
                 if display_time and count % PRINT_INTERVAL: 
@@ -261,11 +270,11 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
         # change from microsecond to millisecond
         device_timestamps = np.array(device_timestamps)/1000
         
-        np.savetxt(os.path.join(filename_prefix, 'depth_ts.txt'),device_timestamps, fmt = '%f')
-        print(' - Session Average Frame rate = ', str(round(len(system_timestamps) / (max(system_timestamps)-min(system_timestamps)), 2))+' fps')
+        # np.savetxt(os.path.join(filename_prefix, 'depth_ts.txt'),device_timestamps, fmt = '%f')
+        # print(' - Session Average Frame rate = ', str(round(len(system_timestamps) / (max(system_timestamps)-min(system_timestamps)), 2))+' fps')
 
-        image_queue.put(tuple())
-        write_process.join()
+        # image_queue.put(tuple())
+        # write_process.join()
 
         if display_frames:
             display_queue.put(tuple())
