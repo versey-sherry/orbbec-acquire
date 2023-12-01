@@ -253,7 +253,7 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
             
             image_queue.put((ir_data,depth_data))
             if display_frames and count % 2 == 0:
-                display_queue.put((cv2.cvtColor(ir_data, cv2.COLOR_GRAY2RGB),))
+                display_queue.put((ir_data,))
 
             if count > 0:
                 if display_time and count % PRINT_INTERVAL: 
