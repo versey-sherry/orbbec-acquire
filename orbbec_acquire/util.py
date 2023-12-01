@@ -176,8 +176,8 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
 
     camera_name = filename_prefix.split('.')[-1]
     image_queue = Queue()
-    # write_process = Process(target=write_images, args=(image_queue, filename_prefix), kwargs={'save_ir': save_ir})
-    # write_process.start()
+    write_process = Process(target=write_images, args=(image_queue, filename_prefix), kwargs={'save_ir': save_ir})
+    write_process.start()
     
     if display_frames: 
         display_queue = Queue()
@@ -216,9 +216,17 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
             if frames is None: 
                 print('Dropped frame')
                 continue
+            
+            # record system timestamp
+            system_timestamps.append(time.time())
+
             depth_frame = frames.get_depth_frame()
             if depth_frame is None:
                 continue
+
+            # record device timestamp
+            # both depth and ir get_timestamp method yield same result
+            device_timestamps.append(depth_frame.get_timestamp())
             width = depth_frame.get_width()
             height = depth_frame.get_height()
             scale = depth_frame.get_depth_scale()
@@ -229,18 +237,13 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
             depth_data = np.where((depth_data > MIN_DEPTH) & (depth_data < MAX_DEPTH), depth_data, 0)
             depth_data = depth_data.astype(np.uint16)
             
-            # not sure how to get device time stamp yet
-            system_timestamps.append(time.time())
-            
+            # get ir frames
             ir_frame = frames.get_ir_frame()
             if ir_frame is None:
                 continue
             ir_data = np.asanyarray(ir_frame.get_data())
             width = ir_frame.get_width()
             height = ir_frame.get_height()
-            ir_format = ir_frame.get_format()
-            print('irformat', ir_format)
-
             ir_data = np.frombuffer(ir_data, dtype=np.uint16)
             ir_data = np.resize(ir_data, (height, width, 1))
 
@@ -257,7 +260,6 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
 
             if count > 0:
                 if display_time and count % PRINT_INTERVAL: 
-                    # sys.stdout.write('\rRecorded '+repr(int(time.time()-start_time))+' out of '+repr(recording_length)+' seconds')
                     sys.stdout.write('\rRecorded '+repr(int(time.time()-start_time))+' out of '+repr(recording_length)+' seconds '+
                                     '- Current Frame rate '+ str(round(len(system_timestamps) / (max(system_timestamps)-min(system_timestamps)), 2))+' fps')
             count += 1
@@ -269,11 +271,11 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
         # change from microsecond to millisecond
         device_timestamps = np.array(device_timestamps)/1000
         
-        # np.savetxt(os.path.join(filename_prefix, 'depth_ts.txt'),device_timestamps, fmt = '%f')
-        # print(' - Session Average Frame rate = ', str(round(len(system_timestamps) / (max(system_timestamps)-min(system_timestamps)), 2))+' fps')
+        np.savetxt(os.path.join(filename_prefix, 'depth_ts.txt'), device_timestamps, fmt = '%f')
+        print(' - Session Average Frame rate = ', str(round(len(system_timestamps) / (max(system_timestamps)-min(system_timestamps)), 2))+' fps')
 
-        # image_queue.put(tuple())
-        # write_process.join()
+        image_queue.put(tuple())
+        write_process.join()
 
         if display_frames:
             display_queue.put(tuple())
