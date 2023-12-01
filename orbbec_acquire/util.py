@@ -201,7 +201,7 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
     # start the camera
     pipeline.start(config)
     
-    image_queue = Queue()
+    # set up timestamp recording
     system_timestamps = []
     device_timestamps = []
     start_time = time.time()
