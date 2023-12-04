@@ -268,8 +268,7 @@ def start_recording(base_dir, subject_name, session_name, recording_length,
 
     finally:
         pipeline.stop()
-        # change from microsecond to millisecond
-        device_timestamps = np.array(device_timestamps)/1000
+        device_timestamps = np.array(device_timestamps)
         
         np.savetxt(os.path.join(filename_prefix, 'depth_ts.txt'), device_timestamps, fmt = '%f')
         print(' - Session Average Frame rate = ', str(round(len(system_timestamps) / (max(system_timestamps)-min(system_timestamps)), 2))+' fps')
