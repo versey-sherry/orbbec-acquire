@@ -44,3 +44,6 @@ def record(base_dir, subject_name, session_name, save_ir, recording_length, seri
     start_recording(base_dir=base_dir, subject_name = subject_name, session_name = session_name, 
                        recording_length = recording_length, serial_number=serial_number, save_ir = save_ir,
                        display_frames = preview, display_time = display_time)
+    
+    # start_recording(base_dir, subject_name, session_name, recording_length, 
+    #                    serial_number=None, save_ir = True, display_frames = True, display_time = True):
